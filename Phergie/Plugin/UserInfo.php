@@ -94,13 +94,14 @@ class Phergie_Plugin_UserInfo extends Phergie_Plugin_Abstract
 
                 // Unknow users - temp fix
                 if (!isset($this->store[$chan][$nick])) {
-                    $this->store[$chan][$nick] = self::REGULAR;
+                    $this->store[$chan][$nick]['flag'] = self::REGULAR;
+                    $this->doWhois($nick);
                 }
 
                 if ($operation == '+') {
-                    $this->store[$chan][$nick] |= $mode;
+                    $this->store[$chan][$nick]['flag'] |= $mode;
                 } else if ($operation == '-') {
-                    $this->store[$chan][$nick] ^= $mode;
+                    $this->store[$chan][$nick]['flag'] ^= $mode;
                 }
             }
         }
@@ -116,7 +117,8 @@ class Phergie_Plugin_UserInfo extends Phergie_Plugin_Abstract
         $chan = ltrim(trim(strtolower($this->event->getArgument(0))), ":");
         $nick = trim($this->event->getNick());
 
-        $this->store[$chan][$nick] = self::REGULAR;
+        $this->store[$chan][$nick]['flag'] = self::REGULAR;
+        $this->doWhois($nick);
     }
 
     /**
@@ -175,16 +177,23 @@ class Phergie_Plugin_UserInfo extends Phergie_Plugin_Abstract
      */
     public function onResponse()
     {
-        if ($this->event->getCode() != Phergie_Event_Response::RPL_NAMREPLY) {
-            return;
+        switch ($this->event->getCode()) {
+            case Phergie_Event_Response::RPL_NAMREPLY:
+                $this->handleNameList();
+                break;
+            case Phergie_Event_Response::RPL_WHOISUSER:
+                $this->handleWhoisUser();
+                break;
         }
+    }
 
+    protected function handleNameList() {
         $array = explode(' ', $this->event->getDescription());
         $chan  = trim(strtolower($array[1]));
         $count = count($array);
 
+        // Start on the 3rd to ignore, blank, chan, and our name
         for ($i = 3; $i < $count; $i++) {
-
             if (empty($array[$i])) {
                 continue;
             }
@@ -192,24 +201,40 @@ class Phergie_Plugin_UserInfo extends Phergie_Plugin_Abstract
             $user = trim($array[$i]);
 
             $flag = self::REGULAR;
-            if ($user[0] == '~') {
-                $flag |= self::OWNER;
-            } else if ($user[0] == '&') {
-                $flag |= self::ADMIN;
-            } else if ($user[0] == '@') {
-                $flag |= self::OP;
-            } else if ($user[0] == '%') {
-                $flag |= self::HALFOP;
-            } else if ($user[0] == '+') {
-                $flag |= self::VOICE;
+            switch ($user[0]) {
+                case '~':
+                    $flag |= self::OWNER;
+                    break;
+                case '&':
+                    $flag |= self::ADMIN;
+                    break;
+                case '@':
+                    $flag |= self::OP;
+                    break;
+                case '%':
+                    $flag |= self::HALFOP;
+                    break;
+                case '+':
+                    $flag |= self::VOICE;
+                    break;
             }
 
             if ($flag != self::REGULAR) {
                 $user = substr($user, 1);
             }
 
-            $this->store[$chan][$user] = $flag;
+            // Request detailed information for user
+            $this->doWhois($user);
+
+            $this->store[$chan][$nick]['flag'] = $flag;
         }
+    }
+
+    protected function handleWhoisUser() {
+        $array = $this->event->getDescription();
+        $nick = trim($array[1]);
+        $ident = trim(substr($array[2], 1));
+        $this->store[$chan][$nick]['ident'] = $ident;
     }
 
     /**
@@ -283,7 +308,7 @@ class Phergie_Plugin_UserInfo extends Phergie_Plugin_Abstract
             return false;
         }
 
-        return ($this->store[$chan][$nick] & $mode) != 0;
+        return ($this->store[$chan][$nick]['flag'] & $mode) != 0;
     }
 
     /**
@@ -387,8 +412,8 @@ class Phergie_Plugin_UserInfo extends Phergie_Plugin_Abstract
      *
      * To exclude the bot's current nick, for example:
      *     $chan = $this->getEvent()->getSource();
-     * 	   $current_nick = $this->getConnection()->getNick();
-     * 	   $random_user = $this->plugins->getPlugin('UserInfo')
+     *        $current_nick = $this->getConnection()->getNick();
+     *        $random_user = $this->plugins->getPlugin('UserInfo')
      *          ->getRandomUser( $chan, array( $current_nick ) );
      *
      * @param string $chan   The channel name
@@ -436,5 +461,21 @@ class Phergie_Plugin_UserInfo extends Phergie_Plugin_Abstract
         }
 
         return $channels;
+    }
+
+    /**
+     * Returns identity name of user holding nick
+     *
+     * @param string $nick Nick of the user
+     *
+     * @return string|bool
+     */
+    public function getNickIdent($nick) {
+        foreach ($this->store as $chan => $store) {
+            if (isset($store[$nick])) {
+                return $store[$nick]['ident'];
+            }
+        }
+        return false;
     }
 }

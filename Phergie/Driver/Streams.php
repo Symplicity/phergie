@@ -312,6 +312,10 @@ class Phergie_Driver_Streams extends Phergie_Driver_Abstract
             $args = $this->parseArguments($args, 3);
             break;
 
+        case '311':
+            $args = $this->parseArguments($args, 6);
+            break;
+
         // Remove target and colon preceding description from responses
         default:
             $args = substr($args, strpos($args, ' ') + 2);
