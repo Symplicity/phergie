@@ -541,6 +541,16 @@ class Phergie_Event_Request
     }
 
     /**
+     * Returns the username of the user who originated the event.
+     *
+     * @return string
+     */
+    public function getUsername()
+    {
+        return $this->getHostmask()->getUsername();
+    }
+
+    /**
      * Determines whether a given string is a valid IRC channel name.
      *
      * @param string $string String to analyze
