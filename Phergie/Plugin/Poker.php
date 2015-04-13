@@ -283,8 +283,10 @@ class Phergie_Plugin_Poker extends Phergie_Plugin_Abstract {
 			return false;
 		}
 
-		$hand = $game['players'][$player]->getHand();
-		$this->doPrivmsg($chan, "$player was holding: $hand");
+		if (isset($game['players'][$player])) {
+			$hand = $game['players'][$player]->getHand();
+			$this->doPrivmsg($chan, "$player was holding: $hand");
+		}
 	}
 
 	public function onCommandFold() {
